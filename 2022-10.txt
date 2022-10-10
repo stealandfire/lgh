@@ -1,0 +1,143 @@
+关于mybatis和jdbctemplate？
+关于mybatis的用法？
+第一个项目，纯mybatis，mapper加xml。
+第二个项目，mybatis 加上 MBG生成的mapper和xml，生成的mapper是一套接口，用于单表操作。手写的mapper是一套接口，用于复杂查询。
+第三个项目，手写的xml加上 MBG生成的mapper和xml，封装一层dao，单表操作调用生成的mapper，复杂操作用 sqlSession通过statement名称调用。
+第四个项目，使用mybatis-plus。
+
+MBG生成的mapper，如果表里面有大数据类型的字段比如text，会拆分生成两个接口，比如 selectById 和 selectByIdWithBlob ，前者是查不出这个字段值，其实是一种优化，但是不清楚的话，出问题都查不到。
+
+##############################################################################
+mysql：
+driver:com.mysql.cj.jdbc.Driver
+username：root
+password：167021
+url：
+jdbc:mysql://localhost:3306/mybatis?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+
+##############################################################################
+10-6
+##############################################################################
+Spring事务：
+事务的核心是事务策略。
+事务策略被 TransactionManager 定义。
+TransactionManager：Spring事务管理器实现的标记接口。命令式的，反应式的。
+PlatformTransactionManager, ReactiveTransactionManager。
+
+#PlatformTransactionManager：
+可以通过编程式事务去使用。
+#TransactionStatus getTransaction(@Nullable TransactionDefinition definition) throws TransactionException;
+TransactionStatus 表示我们认为的事务，getTransaction 获得的可以是新的，或者是已有的。
+TransactionStatus 和线程是一一对应的。
+
+#TransactionDefinition
+控制事务执行和查询事务状态 
+1.传播
+2.隔离
+3.超时
+4.只读状态
+
+txManager（PlatformTransactionManager，DataSourceTransactionManager） <- dataSource
+
+##资源和事务同步
+##声明式事务
+##编程式事务
+##两者的选择
+##事务绑定事件
+##常见问题
+#####################################################################################
+public static void main(final String[] args) throws Exception {
+	ApplicationContext context = new ClassPathXmlApplicationContext("context.xml");
+	FooService fooService = context.getBean(FooService.class);
+	fooService.insertFoo(new Foo());
+}
+<!-- Spring 容器启动中... -->
+[AspectJInvocationContextExposingAdvisorAutoProxyCreator] - Creating implicit proxy for bean 'fooService' with 0 common interceptors and 1 specific interceptors
+
+<!-- DefaultFooService 已经被代理 -->
+[JdkDynamicAopProxy] - Creating JDK dynamic proxy for [x.y.service.DefaultFooService]
+
+<!-- ... the insertFoo(..) method is now being invoked on the proxy -->
+[TransactionInterceptor] - Getting transaction for x.y.service.FooService.insertFoo
+
+<!-- the transactional advice kicks in here... -->
+[DataSourceTransactionManager] - Creating new transaction with name [x.y.service.FooService.insertFoo]
+[DataSourceTransactionManager] - Acquired Connection [org.apache.commons.dbcp.PoolableConnection@a53de4] for JDBC transaction
+
+<!-- the insertFoo(..) method from DefaultFooService throws an exception... -->
+[RuleBasedTransactionAttribute] - Applying rules to determine whether transaction should rollback on java.lang.UnsupportedOperationException
+[TransactionInterceptor] - Invoking rollback for transaction on x.y.service.FooService.insertFoo due to throwable [java.lang.UnsupportedOperationException]
+
+<!-- and the transaction is rolled back (by default, RuntimeException instances cause rollback) -->
+[DataSourceTransactionManager] - Rolling back JDBC transaction on Connection [org.apache.commons.dbcp.PoolableConnection@a53de4]
+[DataSourceTransactionManager] - Releasing JDBC Connection after transaction
+[DataSourceUtils] - Returning JDBC Connection to DataSource
+
+Exception in thread "main" java.lang.UnsupportedOperationException at x.y.service.DefaultFooService.insertFoo(DefaultFooService.java:14)
+<!-- AOP infrastructure stack trace elements removed for clarity -->
+at $Proxy0.insertFoo(Unknown Source)
+at Boot.main(Boot.java:11)
+#####################################################################################
+@Transactional
+默认配置：回滚 RuntimeException，Error，不回滚 UncheckedException。
+可以通过指定回滚规则准确配置哪些Exception类型将事务标记为回滚，包括受检异常。
+
+xml 配置特定的回滚：
+<tx:advice id="txAdvice" transaction-manager="txManager">
+    <tx:attributes>
+    <tx:method name="get*" read-only="true" rollback-for="NoProductInStockException"/>
+    <tx:method name="*"/>
+    </tx:attributes>
+</tx:advice>
+
+<tx:advice id="txAdvice">
+    <tx:attributes>
+    <tx:method name="updateStock" no-rollback-for="InstrumentNotFoundException"/>
+    <tx:method name="*"/>
+    </tx:attributes>
+</tx:advice>
+
+编程式手动回滚（不推荐）
+try {
+	// some business logic...
+} catch (NoProductInStockException ex) {
+	// trigger rollback programmatically
+	TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+}
+
+###############################################
+事务的默认配置：
+传播设置是REQUIRED.
+隔离级别为DEFAULT.
+事务是读写的。
+事务超时默认为底层事务系统的默认超时，如果不支持超时，则为无。
+任何RuntimeException触发回滚，任何选中Exception的都不会。
+###############################################
+方法可见性和@Transactional：
+应用于具有public可见性的方法，如果您使用注释对protected、private或包可见的方法进行@Transactional 注释，则不会引发错误，但带注释的方法不会显示配置的事务设置。
+
+在代理模式下（默认），只有通过代理传入的外部方法调用会被拦截。这意味着自调用（实际上，目标对象中的一个方法调用目标对象的另一个方法）不会导致运行时的实际事务，即使调用的方法被标记为@Transactional。此外，代理必须完全初始化以提供预期的行为，因此您不应在初始化代码中依赖此功能 - 例如，在@PostConstruct 方法中。
+###############################################
+配置多个事务管理器，通过 value 分隔
+###############################################
+事务传播
+（1）required，官网图片
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
